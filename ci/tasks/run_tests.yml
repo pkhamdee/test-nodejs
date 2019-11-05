@@ -1,0 +1,15 @@
+---
+platform: linux
+
+image_resource:
+  type: docker-image
+  source:
+    repository: node
+    tag: latest
+
+inputs:
+  - name: test-nodejs
+  - name: dependency-cache
+
+run:
+  path: test-nodejs/ci/scripts/run_tests.sh
