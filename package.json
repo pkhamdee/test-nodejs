@@ -4,7 +4,7 @@
   "description": "Testing Hapi.js With Jest",
   "main": "server.js",
   "scripts": {
-    "test": "jest --watchAll --coverage  --verbose",
+    "test": "jest --coverage  --verbose",
     "start": "node server.js"
   },
   "repository": {
