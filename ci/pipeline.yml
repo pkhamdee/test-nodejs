@@ -25,6 +25,7 @@ jobs:
       - get: test-nodejs
         trigger: true
       - get: dependency-cache
+      
   - name: Run tests
     plan:
       - get: test-nodejs
@@ -32,5 +33,17 @@ jobs:
         passed: [Install dependencies]
       - get: dependency-cache
         passed: [Install dependencies]
+
       - task: run the test suite
         file: test-nodejs/ci/tasks/run_tests.yml
+
+  - name: Run Builds
+    plan:
+      - get: test-nodejs
+        trigger: true
+        passed: [Install dependencies]
+      - get: dependency-cache
+        passed: [Install dependencies]
+
+      - task: run builds
+        file: test-nodejs/ci/tasks/run_build.yml      
