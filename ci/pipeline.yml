@@ -17,7 +17,7 @@ resources:
     source:
       <<: *repo-source
       paths:
-        - ./project/package.json
+        - package.json
 
 jobs:
   - name: Install dependencies
