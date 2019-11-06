@@ -6,6 +6,12 @@ resource_types:
       repository: ymedlop/npm-cache-resource
       tag: latest
 
+  - name: kubernetes
+    type: docker-image
+    source:
+      repository: zlabjp/kubernetes-resource
+      tag: "latest"    
+
 resources:
   - name: test-nodejs
     type: git
@@ -20,6 +26,11 @@ resources:
       paths:
         - package.json
 
+  - name: k8s-develop
+    type: kubernetes
+    source:
+      kubeconfig: {{kubeconfig-develop}} 
+
   - name: harbor-image
     type: docker-image
     source:
@@ -27,7 +38,16 @@ resources:
       password: {{harbor_password}}
       repository: {{harbor_repository}}
       insecure_registries:
-        - {{harbor_insecure_registry}}       
+        - {{harbor_insecure_registry}}
+      ca_certs:
+        - domain: harbor.pcfgcp.pkhamdee.com:443
+          cert: {{harbor_cert}}           
+
+docker-params: &docker-params
+  tag: git/.git/HEAD
+  tag_as_latest: true
+  cache: true
+  cache_tag: latest
 
 jobs:
   - name: Install dependencies
@@ -51,7 +71,46 @@ jobs:
     plan:
       - get: test-nodejs
         trigger: true
-        passed: [Run Tests]
+        passed: [Run Tests] 
       - put: harbor-image
         params:
-          build: test-nodejs      
+          <<: *docker-params
+          build: test-nodejs
+
+  - name: Deploy to Develop
+    plan:
+      - get: harbor-image
+        trigger: true
+        passed: [Build docker image]
+      - get: test-nodejs
+        passed: [Build docker image]  
+
+      - task: update-k8s-manifest
+        config:
+          platform: linux
+          image_resource:
+            type: docker-image
+            source:
+              repository: ubuntu
+          inputs:
+          - name: test-nodejs
+          - name: harbor-image
+          outputs:
+          - name: updated
+          run:
+            path: bash
+            args:
+            - -c
+            - |
+              set -e
+              DIGEST=`cat docker/digest`
+              sed "s/:latest/@${DIGEST}/g" test-nodejs/k8s/test-nodejs.yml | \
+              sed "s/FIXME/Bump to ${DIGEST}/g" | \
+              sed "s/namespace: test/namespace: test-dev/g" > updated/test-nodejs.yml  
+
+      - put: k8s-develop
+        params:
+          kubectl: apply -f updated/test-nodejs.yml
+          wait_until_ready: 120
+          wait_until_ready_selector: app=test-nodejs    
+
