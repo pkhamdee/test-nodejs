@@ -12,6 +12,7 @@ resources:
     source: &repo-source
       uri: https://github.com/pkhamdee/test-nodejs
       branch: master
+
   - name: dependency-cache
     type: npm-cache
     source:
@@ -19,14 +20,23 @@ resources:
       paths:
         - package.json
 
+  - name: harbor-image
+    type: docker-image
+    source:
+      username: {{harbor_username}}
+      password: {{harbor_password}}
+      repository: {{harbor_repository}}
+      insecure_registries:
+        - {{harbor_insecure_registry}}       
+
 jobs:
   - name: Install dependencies
     plan:
       - get: test-nodejs
         trigger: true
       - get: dependency-cache
-      
-  - name: Run tests
+
+  - name: Run Tests
     plan:
       - get: test-nodejs
         trigger: true
@@ -35,15 +45,13 @@ jobs:
         passed: [Install dependencies]
 
       - task: run the test suite
-        file: test-nodejs/ci/tasks/run_tests.yml
+        file: test-nodejs/ci/tasks/run_tests.yml     
 
-  - name: Run Builds
+  - name: Build docker image
     plan:
       - get: test-nodejs
         trigger: true
-        passed: [Install dependencies]
-      - get: dependency-cache
-        passed: [Install dependencies]
-
-      - task: run builds
-        file: test-nodejs/ci/tasks/run_build.yml      
+        passed: [Run Tests]
+      - put: harbor-image
+        params:
+          build: test-nodejs      
