@@ -105,9 +105,9 @@ jobs:
             - -c
             - |
               set -e
-              sed "s/:latest/@${tag}/g" test-nodejs/k8s/test-nodejs.yml | \
-              sed "s/FIXME/Bump to ${tag}/g" | \
-              sed "s/namespace: test-nodejs/namespace: test-nodejs-dev/g" > updated/test-nodejs.yml  
+              sed "s|:latest|:${tag}|g" test-nodejs/k8s/test-nodejs.yml | \
+              sed "s|FIXME|Bump to ${tag}|g" | \
+              sed "s|test-nodejs-namespace|test-nodejs-dev|g" > updated/test-nodejs.yml  
 
       - put: k8s-develop
         params:
