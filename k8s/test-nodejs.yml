@@ -5,6 +5,39 @@ metadata:
    name: test-nodejs-namespace
 
 ---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: test-nodejs
+  namespace: test-nodejs-namespace
+  labels:
+    app: test-nodejs
+spec:
+  rules:
+  - host: test-nodejs-namespace.dev1.pcfgcp.pkhamdee.com
+    http:
+      paths:
+      - backend:
+          serviceName: test-nodejs-service
+          servicePort: 3000
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-nodejs-service
+  namespace: test-nodejs-namespace
+  labels:
+    app: test-nodejs
+spec:
+  ports:
+  - port: 3000
+    targetPort: 3000
+    protocol: TCP
+  selector:
+    app: test-nodejs
+
+---
 apiVersion: apps/v1beta1
 kind: Deployment
 metadata:
