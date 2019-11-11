@@ -5,11 +5,17 @@ params:
     GIT_NAME: ((git-name))
     SRC_BRANCH: develop
   slack_on_success_params: &SLACK_SUCCESS
-    channel: '#concourse'
+    channel: '#none'
+    username: 'webhookbot'
+    icon_emoji: ':concourse:'
+    silent: true
     text: |
       <!here> :white_check_mark: *$BUILD_PIPELINE_NAME/$BUILD_JOB_NAME* succeeded with build <$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_NAME>!
   slack_on_failure_params: &SLACK_FAILURE
-    channel: '#concourse'
+    channel: '#none'
+    username: 'webhookbot'
+    icon_emoji: ':concourse:'
+    silent: true
     text: |
       <!here> :rotating_light: *$BUILD_PIPELINE_NAME/$BUILD_JOB_NAME* failed with build <$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_NAME>!
 
@@ -18,7 +24,7 @@ resource_types:
     type: docker-image
     source:
       repository: cfcommunity/slack-notification-resource
-      tag: v1.1.3
+      tag: v1.5.0
 
   - name: npm-cache
     type: docker-image
@@ -36,14 +42,21 @@ resources:
   - name: repo-develop
     type: git
     source: &repo-source
-      uri: https://github.com/pkhamdee/test-nodejs
+      uri: https://github.com/pkhamdee/test-nodejs.git
+      username: ((git-username))
+      password: ((git-password))
       branch: develop
+      ignore_paths:
+      - ci/*
+      - README.md
 
   - name: repo-master
     type: git
     source: &repo-source
-      uri: https://github.com/pkhamdee/test-nodejs
-      branch: master    
+      uri: https://github.com/pkhamdee/test-nodejs.git
+      username: ((git-username))
+      password: ((git-password))
+      branch: master   
 
   - name: slack-alert
     icon: slack
@@ -76,7 +89,7 @@ resources:
           cert: {{harbor_cert}}           
 
 docker-params: &docker-params
-  tag: test-nodejs/.git/HEAD
+  tag: repo-src/.git/HEAD
   tag_as_latest: true
   cache: true
   cache_tag: latest
@@ -117,7 +130,7 @@ jobs:
       - put: harbor-image
         params:
           <<: *docker-params
-          build: test-nodejs
+          build: repo-src
         on_failure:
           put: slack-alert
           params:
@@ -153,8 +166,8 @@ jobs:
             - -c
             - |
               set -e
-              HEADID=`cat test-nodejs/.git/HEAD`
-              sed "s|:latest|:${HEADID}|g" test-nodejs/k8s/test-nodejs.yml | \
+              HEADID=`cat repo-src/.git/HEAD`
+              sed "s|:latest|:${HEADID}|g" repo-src/k8s/test-nodejs.yml | \
               sed "s|FIXME|Bump to ${HEADID}|g" | \
               sed "s|test-nodejs-namespace|test-nodejs-dev|g" > updated/test-nodejs.yml  
 
