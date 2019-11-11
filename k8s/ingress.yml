@@ -1,0 +1,14 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: test-nodejs
+  labels:
+    app: test-nodejs
+spec:
+  rules:
+  - host: test-nodejs-dev.dev1.pcfgcp.pkhamdee.com
+    http:
+      paths:
+      - backend:
+          serviceName: test-nodejs-service
+          servicePort: 3000

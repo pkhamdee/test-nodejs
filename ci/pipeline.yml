@@ -86,8 +86,6 @@ jobs:
         passed: [Build docker image]  
 
       - task: update-k8s-manifest
-        params:
-          <<: *docker-params
         config:
           platform: linux
           image_resource:
@@ -105,8 +103,9 @@ jobs:
             - -c
             - |
               set -e
-              sed "s|:latest|:${tag}|g" test-nodejs/k8s/test-nodejs.yml | \
-              sed "s|FIXME|Bump to ${tag}|g" | \
+              HEADID=`cat test-nodejs/.git/HEAD`
+              sed "s|:latest|:${HEADID}|g" test-nodejs/k8s/test-nodejs.yml | \
+              sed "s|FIXME|Bump to ${HEADID}|g" | \
               sed "s|test-nodejs-namespace|test-nodejs-dev|g" > updated/test-nodejs.yml  
 
       - put: k8s-develop

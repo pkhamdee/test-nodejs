@@ -1,4 +1,6 @@
 const Hapi = require('@hapi/hapi');
+const PORT = 3000;
+const HOST = '0.0.0.0';
 const users = [
     { id: 1, name: 'Siva' },
     { id: 2, name: 'Sivasankar' },
@@ -7,8 +9,8 @@ const users = [
 
 // Create server listening on port 3000
 const server = Hapi.server({
-    port: 3000,
-    host: 'localhost'
+    port: PORT,
+    host: HOST
 });
 
 server.route({
