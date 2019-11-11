@@ -98,7 +98,7 @@ jobs:
       - get: dependency-cache
         passed: [install-dependencies]
       - task: run the test suite
-        file: test-nodejs/ci/tasks/run_tests.yml     
+        file: repo-src/ci/tasks/run_tests.yml     
         on_failure:
           put: slack-alert
           params:
@@ -244,34 +244,6 @@ jobs:
         params:
           <<: *SLACK_FAILURE
 
-  - name: install-dependencies-master
-    build_logs_to_retain: 5
-    plan:
-    - aggregate:
-      - get: repo
-        resource: repo-master
-        trigger: true
-        passed: [merge-develop-to-master]
-      - get: dependency-cache  
-  
-  - name: run-test-master
-    plan:
-      - get: repo
-        resource: repo-master
-        trigger: true
-        passed: [install-dependencies-master]
-      - get: dependency-cache
-        passed: [install-dependencies-master]
-      - task: run the test suite
-        file: test-nodejs/ci/tasks/run_tests.yml     
-        on_failure:
-          put: slack-alert
-          params:
-            <<: *SLACK_FAILURE
-        on_success:
-          put: slack-alert
-          params:
-            <<: *SLACK_SUCCESS
 
 
          
