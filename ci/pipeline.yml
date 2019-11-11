@@ -1,5 +1,25 @@
 ---
+params:
+  git: &GIT_PARAMS
+    GIT_EMAIL: ((git-email))
+    GIT_NAME: ((git-name))
+    SRC_BRANCH: develop
+  slack_on_success_params: &SLACK_SUCCESS
+    channel: '#concourse'
+    text: |
+      <!here> :white_check_mark: *$BUILD_PIPELINE_NAME/$BUILD_JOB_NAME* succeeded with build <$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_NAME>!
+  slack_on_failure_params: &SLACK_FAILURE
+    channel: '#concourse'
+    text: |
+      <!here> :rotating_light: *$BUILD_PIPELINE_NAME/$BUILD_JOB_NAME* failed with build <$ATC_EXTERNAL_URL/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME|$BUILD_NAME>!
+
 resource_types:
+  - name: slack-notification
+    type: docker-image
+    source:
+      repository: cfcommunity/slack-notification-resource
+      tag: v1.1.3
+
   - name: npm-cache
     type: docker-image
     source:
@@ -13,11 +33,23 @@ resource_types:
       tag: "latest"    
 
 resources:
-  - name: test-nodejs
+  - name: repo-develop
     type: git
     source: &repo-source
       uri: https://github.com/pkhamdee/test-nodejs
-      branch: master
+      branch: develop
+
+  - name: repo-master
+    type: git
+    source: &repo-source
+      uri: https://github.com/pkhamdee/test-nodejs
+      branch: master    
+
+  - name: slack-alert
+    icon: slack
+    type: slack-notification
+    source:
+      url: {{slack-webhook-url}}
 
   - name: dependency-cache
     type: npm-cache
@@ -50,41 +82,59 @@ docker-params: &docker-params
   cache_tag: latest
 
 jobs:
-  - name: Install dependencies
+  - name: install-dependencies
     plan:
-      - get: test-nodejs
+      - get: repo-src
+        resource: repo-develop
         trigger: true
       - get: dependency-cache
 
-  - name: Run Tests
+  - name: run-test-develop
     plan:
-      - get: test-nodejs
+      - get: repo-src
+        resource: repo-develop
         trigger: true
-        passed: [Install dependencies]
+        passed: [install-dependencies]
       - get: dependency-cache
-        passed: [Install dependencies]
-
+        passed: [install-dependencies]
       - task: run the test suite
         file: test-nodejs/ci/tasks/run_tests.yml     
+        on_failure:
+          put: slack-alert
+          params:
+            <<: *SLACK_FAILURE
+        on_success:
+          put: slack-alert
+          params:
+            <<: *SLACK_SUCCESS
 
-  - name: Build docker image
+  - name: build-docker-image
     plan:
-      - get: test-nodejs
+      - get: repo-src
+        resource: repo-develop
         trigger: true
-        passed: [Run Tests] 
+        passed: [run-test-develop] 
       - put: harbor-image
         params:
           <<: *docker-params
           build: test-nodejs
+        on_failure:
+          put: slack-alert
+          params:
+            <<: *SLACK_FAILURE
+        on_success:
+          put: slack-alert
+          params:
+            <<: *SLACK_SUCCESS  
 
-  - name: Deploy to Develop
+  - name: deploy-k8s-develop
     plan:
       - get: harbor-image
         trigger: true
-        passed: [Build docker image]
-      - get: test-nodejs
-        passed: [Build docker image]  
-
+        passed: [build-docker-image]
+      - get: repo-src
+        resource: repo-develop
+        passed: [build-docker-image]  
       - task: update-k8s-manifest
         config:
           platform: linux
@@ -93,7 +143,7 @@ jobs:
             source:
               repository: ubuntu
           inputs:
-          - name: test-nodejs
+          - name: repo-src
           - name: harbor-image
           outputs:
           - name: updated
@@ -112,5 +162,116 @@ jobs:
         params:
           kubectl: apply -f updated/test-nodejs.yml
           wait_until_ready: 120
-          wait_until_ready_selector: app=test-nodejs    
+          wait_until_ready_selector: app=test-nodejs
+        on_failure:
+          put: slack-alert
+          params:
+            <<: *SLACK_FAILURE
+        on_success:
+          put: slack-alert
+          params:
+            <<: *SLACK_SUCCESS     
 
+  - name: load-test-develop
+    plan:
+    - get: repo-src
+      resource: repo-develop
+      trigger: true
+      passed:
+        - deploy-k8s-develop
+    - task: wrk
+      params:
+      config:
+        platform: linux
+        image_resource:
+          type: registry-image
+          source:
+            repository: skandyla/wrk
+        run:
+          path: sh
+          args:
+            - -c
+            - |
+              sleep 120
+              wrk -t16 -c200 -d30s --timeout 10s http://test-nodejs-dev.dev1.pcfgcp.pkhamdee.com --latency
+
+  - name: merge-develop-to-master
+    plan:
+    - aggregate:
+      - get: repo-src
+        resource: repo-develop
+        passed:
+          - load-test-develop
+      - get: repo-dest
+        resource: repo-master
+    - task: merge-develop-to-master
+      params:
+        <<: *GIT_PARAMS
+        SRC_BRANCH: develop
+      config: &MERGE_SRC_TO_DEST
+        platform: linux
+        image_resource:
+          type: docker-image
+          source:
+            repository: maven
+        inputs:
+        - name: repo-src
+        - name: repo-dest
+        outputs:
+        - name: merged 
+        run:
+          path: bash
+          args:
+          - -c
+          - |
+            set -e
+            shopt -s dotglob
+            mv -f repo-dest/* merged/
+            cd merged
+            git config --global user.email "${GIT_EMAIL}"
+            git config --global user.name "${GIT_NAME}"
+            git remote add -f src ../repo-src
+            git merge --no-edit src/${SRC_BRANCH}
+      on_failure:
+        put: slack-alert
+        params:
+          <<: *SLACK_FAILURE         
+    - put: repo-master
+      params:
+        repository: merged
+      on_failure:
+        put: slack-alert
+        params:
+          <<: *SLACK_FAILURE
+
+  - name: install-dependencies-master
+    build_logs_to_retain: 5
+    plan:
+    - aggregate:
+      - get: repo
+        resource: repo-master
+        trigger: true
+        passed: [merge-develop-to-master]
+      - get: dependency-cache  
+  
+  - name: run-test-master
+    plan:
+      - get: repo
+        resource: repo-master
+        trigger: true
+        passed: [install-dependencies-master]
+      - get: dependency-cache
+        passed: [install-dependencies-master]
+      - task: run the test suite
+        file: test-nodejs/ci/tasks/run_tests.yml     
+        on_failure:
+          put: slack-alert
+          params:
+            <<: *SLACK_FAILURE
+        on_success:
+          put: slack-alert
+          params:
+            <<: *SLACK_SUCCESS
+
+
+         

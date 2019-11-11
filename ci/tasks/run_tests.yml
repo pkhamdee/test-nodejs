@@ -8,7 +8,7 @@ image_resource:
     tag: latest
 
 inputs:
-  - name: test-nodejs
+  - name: repo-src
   - name: dependency-cache
 
 run:
