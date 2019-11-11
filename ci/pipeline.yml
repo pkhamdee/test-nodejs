@@ -41,6 +41,7 @@ resource_types:
 resources:
   - name: repo-develop
     type: git
+    check_every: 5s
     source: &repo-source
       uri: https://github.com/pkhamdee/test-nodejs.git
       username: ((git-username))
@@ -52,7 +53,7 @@ resources:
 
   - name: repo-master
     type: git
-    source: &repo-source
+    source:
       uri: https://github.com/pkhamdee/test-nodejs.git
       username: ((git-username))
       password: ((git-password))
@@ -207,16 +208,54 @@ jobs:
             - |
               sleep 120
               wrk -t16 -c200 -d30s --timeout 10s http://test-nodejs-dev.dev1.pcfgcp.pkhamdee.com --latency
+      on_failure:
+        put: slack-alert
+        params:
+          <<: *SLACK_FAILURE
+      on_success:
+        put: slack-alert
+        params:
+          <<: *SLACK_SUCCESS   
+
+  - name: integration-test
+    plan:
+    - get: repo-src
+      resource: repo-develop
+      trigger: true
+      passed:
+        - deploy-k8s-develop
+    - task: run integration test
+      params:
+      config:
+        platform: linux
+        image_resource:
+          type: docker-image
+          source:
+            repository: maven
+        run:
+          path: bash
+          args:
+            - -c
+            - |
+              echo "run integration test ..."
+      on_failure:
+        put: slack-alert
+        params:
+          <<: *SLACK_FAILURE
+      on_success:
+        put: slack-alert
+        params:
+          <<: *SLACK_SUCCESS                
 
   - name: merge-develop-to-master
     plan:
-    - aggregate:
-      - get: repo-src
-        resource: repo-develop
-        passed:
-          - load-test-develop
-      - get: repo-dest
-        resource: repo-master
+    - get: repo-src
+      resource: repo-develop
+      passed:
+        - load-test-develop
+        - integration-test
+    - get: repo-dest
+      resource: repo-master
     - task: merge-develop-to-master
       params:
         <<: *GIT_PARAMS
@@ -243,6 +282,7 @@ jobs:
             cd merged
             git config --global user.email "${GIT_EMAIL}"
             git config --global user.name "${GIT_NAME}"
+            git config --global --list
             git remote add -f src ../repo-src
             git merge --no-edit src/${SRC_BRANCH}
       on_failure:
