@@ -12,4 +12,4 @@ inputs:
   - name: dependency-cache
 
 run:
-  path: test-nodejs/ci/scripts/run_tests.sh
+  path: repo-src/ci/scripts/run_tests.sh
