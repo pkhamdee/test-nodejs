@@ -1,1 +1,2 @@
-# testing-hapi.js-with-jest
+# testing-hapi.js-with-jesti
+test
