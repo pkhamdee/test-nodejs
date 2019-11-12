@@ -51,13 +51,13 @@ resources:
       - ci/*
       - README.md
 
-  - name: repo-master
-    type: git
-    source:
-      uri: https://github.com/pkhamdee/test-nodejs.git
-      username: ((git-username))
-      password: ((git-password))
-      branch: master   
+  # - name: repo-master
+  #   type: git
+  #   source:
+  #     uri: https://github.com/pkhamdee/test-nodejs.git
+  #     username: ((git-username))
+  #     password: ((git-password))
+  #     branch: master   
 
   - name: slack-alert
     icon: slack
@@ -247,55 +247,55 @@ jobs:
         params:
           <<: *SLACK_SUCCESS                
 
-  - name: merge-develop-to-master
-    plan:
-    - get: repo-src
-      resource: repo-develop
-      passed:
-        - load-test-develop
-        - integration-test
-    - get: repo-dest
-      resource: repo-master
-    - task: merge-develop-to-master
-      params:
-        <<: *GIT_PARAMS
-        SRC_BRANCH: develop
-      config: &MERGE_SRC_TO_DEST
-        platform: linux
-        image_resource:
-          type: docker-image
-          source:
-            repository: maven
-        inputs:
-        - name: repo-src
-        - name: repo-dest
-        outputs:
-        - name: merged 
-        run:
-          path: bash
-          args:
-          - -c
-          - |
-            set -e
-            shopt -s dotglob
-            mv -f repo-dest/* merged/
-            cd merged
-            git config --global user.email "${GIT_EMAIL}"
-            git config --global user.name "${GIT_NAME}"
-            git config --global --list
-            git remote add -f src ../repo-src
-            git merge --no-edit src/${SRC_BRANCH}
-      on_failure:
-        put: slack-alert
-        params:
-          <<: *SLACK_FAILURE         
-    - put: repo-master
-      params:
-        repository: merged
-      on_failure:
-        put: slack-alert
-        params:
-          <<: *SLACK_FAILURE
+  # - name: merge-develop-to-master
+  #   plan:
+  #   - get: repo-src
+  #     resource: repo-develop
+  #     passed:
+  #       - load-test-develop
+  #       - integration-test
+  #   - get: repo-dest
+  #     resource: repo-master
+  #   - task: merge-develop-to-master
+  #     params:
+  #       <<: *GIT_PARAMS
+  #       SRC_BRANCH: develop
+  #     config: &MERGE_SRC_TO_DEST
+  #       platform: linux
+  #       image_resource:
+  #         type: docker-image
+  #         source:
+  #           repository: maven
+  #       inputs:
+  #       - name: repo-src
+  #       - name: repo-dest
+  #       outputs:
+  #       - name: merged 
+  #       run:
+  #         path: bash
+  #         args:
+  #         - -c
+  #         - |
+  #           set -e
+  #           shopt -s dotglob
+  #           mv -f repo-dest/* merged/
+  #           cd merged
+  #           git config --global user.email "${GIT_EMAIL}"
+  #           git config --global user.name "${GIT_NAME}"
+  #           git config --global --list
+  #           git remote add -f src ../repo-src
+  #           git merge --no-edit src/${SRC_BRANCH}
+  #     on_failure:
+  #       put: slack-alert
+  #       params:
+  #         <<: *SLACK_FAILURE         
+  #   - put: repo-master
+  #     params:
+  #       repository: merged
+  #     on_failure:
+  #       put: slack-alert
+  #       params:
+  #         <<: *SLACK_FAILURE
 
 
 
